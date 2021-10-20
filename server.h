@@ -16,21 +16,20 @@
 
 class Server {
 public:
-    asio::io_service service;
-    asio::ip::tcp::endpoint ep;
+    asio::io_context& context;
     asio::ip::tcp::acceptor acceptor;
 
     std::thread* handle;
     std::atomic<bool> serverClose;
 
-    Server();
+    Server(asio::io_context& ctx);
     virtual ~Server();
 
     void start();
     void getIpAddress();
 
-    bool Accept(asio::ip::tcp::socket& soc, size_t timeout);
-    void Acceptor(asio::ip::tcp::socket* soc);
+    void ClientRun(asio::ip::tcp::socket& soc);
+    void Acceptor(const asio::error_code& error, asio::ip::tcp::socket* soc);
 
     void Handler();
 

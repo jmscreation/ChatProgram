@@ -9,8 +9,10 @@ int main(int argc, char** argv) {
     if(argc > 1){
         std::string v = argv[1];
 
+        asio::io_context context;
+
         if(v == "server"){
-            Server server;
+            Server server(context);
 
             return server.Run();
         }
