@@ -2,6 +2,8 @@
 #include "client.h"
 #include "pause.h"
 
+#include "application.h"
+
 #include <iostream>
 
 int main(int argc, char** argv) {
@@ -14,11 +16,11 @@ int main(int argc, char** argv) {
         if(v == "server"){
             Server server(context);
 
-            return server.Run();
+            return server.Run<ServerApplication>(); // ServerApplication is what each client connects to
         }
 
         if(v == "client"){
-            Client client;
+            Client client(context);
 
             return client.Run();
         }
