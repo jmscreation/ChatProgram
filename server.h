@@ -13,63 +13,15 @@
 #include <mutex>
 #include <atomic>
 #include <iostream>
-#include <queue>
 #include <memory>
+
+#include "connection_handler.h"
+
+#include "base_application.h"
 
 #include "proto.h"
 #include "pause.h"
 #include "clock.h"
-
-class ClientHandle; // forward declaration for Application
-
-/*
-    Application class is derived for user to make custom application
-    This is the application endpoint
-*/
-class Application {
-public:
-    std::shared_ptr<ClientHandle> client;
-
-    Application(std::shared_ptr<ClientHandle> client): client(client) {}
-    virtual ~Application() = default;
-
-    virtual bool Init() = 0;        // called once when the client is connected - for each client
-    virtual bool Handle() = 0;      // called within a loop after the client is connected - first call is after Init
-    virtual void Close() = 0;       // called when the application is closed by the client - for each client that leaves
-};
-
-/*
-    This class handles an individual client on the server
-*/
-class ClientHandle : public std::enable_shared_from_this<ClientHandle> {
-    asio::ip::tcp::socket socket;
-    std::mutex ctxLock;
-    std::queue<Protocol::Message> inbox, outbox;
-
-    std::thread* localhandle;
-    Application* app;
-
-    std::atomic<bool> running;
-    void _Handle();
-    
-    Protocol::MessageCache curIn, curOut; // cache messages for incoming and outgoing messages
-
-    bool asioReadMessageHandle(); // init async read handle
-    bool asioSendMessageHandle(); // init async write handle
-    void start(Application* application); // begin thread localhandle application
-
-
-public:
-    bool readMessage(Protocol::Message& msg);
-    bool sendMessage(Protocol::Message&& msg);
-    std::string getIPAddress();
-
-    ClientHandle(asio::ip::tcp::socket soc);
-    virtual ~ClientHandle();
-
-
-    friend class Server;
-};
 
 
 
@@ -83,7 +35,7 @@ public:
     asio::io_context::work idleWork;
 
     std::mutex joinMtx;
-    std::vector<std::shared_ptr<ClientHandle>> clientHandles;
+    std::vector<std::shared_ptr<ConnectionHandle>> clientHandles;
 
     Server(asio::io_context& ctx);
     virtual ~Server();
@@ -101,7 +53,7 @@ public:
         std::cout << "Client connecting from: "
                 << addr.address().to_string() << ":" << addr.port() << "\n";
 
-        auto client = std::make_shared<ClientHandle>(std::move(soc));
+        auto client = std::make_shared<ConnectionHandle>(std::move(soc));
 
         client->start(new T(client)); // instantiate application in memory
 
