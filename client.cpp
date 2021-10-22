@@ -7,6 +7,12 @@
 using asio::ip::tcp;
 using namespace Protocol;
 
+/* -------------------------------------------------------------------------------------
+            This is a temporary client application for debugging server
+    The official client application will work similar to the server application
+    framework, and this current client debugger will be discarded
+---------------------------------------------------------------------------------------- */
+
 Client::Client(asio::io_context& ctx): context(ctx) {} 
 
 asio::ip::address Client::getIpAddress(const std::string& hostname) {
@@ -36,36 +42,60 @@ int Client::Run() {
     std::string ipAddr;
     std::cout << "Connect To: ";
     std::cin >> ipAddr;
+
     try {
+
         tcp::endpoint ep(getIpAddress(ipAddr), PORT);
         if(ep.address().is_unspecified()){
             std::cout << "IP Address Invalid\n";
             return 1;
         }
+        std::cout << "Press any key to quit...\n";
+
         tcp::socket socket(context);
-
-
-        Message msg;
         std::cout << "Connecting to " << ipAddr << "...\n";
         socket.connect(ep);
-        socket.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_RCVTIMEO>{3000}); // receive timeout 3 seconds
+        socket.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_RCVTIMEO>{1000}); // receive timeout 3 seconds
 
-        std::cout << "Connected!\n";
-        
-        if(!readMessage(socket, msg)){
-            std::cout << "failed to read message\n";
-        } else {
-            std::cout << msg.bytes << "\n";
-        }
+        std::cout << "Connected!\n\n";
+
+        std::atomic<bool> running = true;
+        std::thread localRunner([&](){
+            do {
+                try {
+
+                    Message msg;
+
+                    if(readMessage(socket, msg)){
+                        if(msg.header.id == 0){
+                            std::cout << msg.bytes << "\n";
+                        }
+                    }
+
+                    if(!sendMessage(socket, Message("test message response"))){
+                        std::cout << "Server closed connection\n";
+                        return;
+                    }
+
+                } catch(std::system_error err){
+                    std::cout << err.what() << "\n";
+                    return;
+                }
+            } while(running);
+
+        });
+
+        pause();
+
+        running = false;
+
+        if(localRunner.joinable()) localRunner.join();
 
     } catch(std::system_error err){
         std::cout << err.what() << "\n";
         return 1;
     }
-    
 
-
-    pause();
     return 0;
 }
 
@@ -75,9 +105,7 @@ int Client::Run() {
 */
 
 bool Client::readMessage(tcp::socket& soc, Message& msg) {
-    std::cout << "read message:\n";
     try {
-        std::cout << "\tread header\n";
         size_t pos = 0;
         do {
             size_t read = soc.read_some(asio::buffer( ((char*)&msg.header) + pos, sizeof(msg.header) - pos));
@@ -89,7 +117,6 @@ bool Client::readMessage(tcp::socket& soc, Message& msg) {
             }
         } while(pos < sizeof(msg.header));
 
-        std::cout << "\tread content\n";
         std::string buf;
         pos = 0;
         while(pos < msg.header.length){
@@ -109,24 +136,29 @@ bool Client::readMessage(tcp::socket& soc, Message& msg) {
 }
 
 bool Client::sendMessage(tcp::socket& soc, const Message& msg) {
-    size_t pos = 0;
-    while(pos < sizeof(msg.header)){
-        size_t written = soc.write_some(asio::buffer(((char*)&msg.header) + pos, sizeof(msg.header) - pos));
-        pos += written;
-        if(!written){
-            if(pos != sizeof(msg.header)) return false;
-            break;
+    try {
+        size_t pos = 0;
+        while(pos < sizeof(msg.header)){
+            size_t written = soc.write_some(asio::buffer(((char*)&msg.header) + pos, sizeof(msg.header) - pos));
+            pos += written;
+            if(!written){
+                if(pos != sizeof(msg.header)) return false;
+                break;
+            }
         }
-    }
 
-    const char *cpos = msg.bytes, *end = cpos + msg.header.length;
-    while(cpos < end){
-        size_t written = soc.write_some(asio::buffer(cpos, end - cpos));
-        cpos += written;
-        if(!written){
-            if(cpos < end) return false;
-            break;
+        const char *cpos = msg.bytes, *end = cpos + msg.header.length;
+        while(cpos < end){
+            size_t written = soc.write_some(asio::buffer(cpos, end - cpos));
+            cpos += written;
+            if(!written){
+                if(cpos < end) return false;
+                break;
+            }
         }
+    } catch(std::system_error err) {
+        std::cout << err.what() << "\n";
+        return false;
     }
 
     return true;

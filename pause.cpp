@@ -3,7 +3,6 @@
 
 
 void pause() {
-    std::cout << "Press any key to continue...\n";
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     do {

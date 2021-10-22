@@ -1,11 +1,14 @@
 #pragma once
 
+#include "clock.h"
 #include "server.h"
 
-class ServerApplication : public ClientHandle {
+class ServerApplication : public Application {
+    Clock keepAlive;
 public:
-    ServerApplication() = default;
+    ServerApplication(std::shared_ptr<ClientHandle> client): Application(client) {}
 
-    bool Init() override;
-    bool Handle() override;
+    virtual bool Init() override;
+    virtual bool Handle() override;
+    virtual void Close() override;
 };

@@ -4,7 +4,7 @@ using namespace Protocol;
 
 bool ServerApplication::Init() {
 
-    if(!sendMessage(Message("WELCOME HERE"))){
+    if(!client->sendMessage(Message("WELCOME HERE"))){
         std::cout << "Failed to send message\n";
     } else {
         std::cout << "Message sent\n";
@@ -15,9 +15,22 @@ bool ServerApplication::Init() {
 
 bool ServerApplication::Handle() {
     Message msg;
-    if(readMessage(msg)){
-        std::cout << "Client says:" << msg.bytes << "\n";
+    if(client->readMessage(msg)){
+        if(msg.header.id == 0){
+            std::cout << "Client Message: " << msg.bytes << "\n";
+        }
+    }
+
+    if(keepAlive.getMilliseconds() > 1000){
+        if(!client->sendMessage(Message(1, "keep-alive"))){
+            return false;
+        }
+        keepAlive.restart();
     }
 
     return true;
+}
+
+void ServerApplication::Close() {
+    std::cout << "Client left: " << client->getIPAddress() << "\n";
 }

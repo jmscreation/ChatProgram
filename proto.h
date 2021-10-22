@@ -1,6 +1,10 @@
 #pragma once
 
+#ifdef _WIN32
 #define _WIN32_WINDOWS
+#endif
+
+#define ASIO_STANDALONE
 #include <asio.hpp>
 
 #include <cstdlib>
@@ -12,8 +16,8 @@
 namespace Protocol {
     struct Message {
         struct Header {
-            size_t id;
-            size_t length;
+            uint32_t id;
+            uint32_t length;
         };
 
         Header header;
@@ -22,9 +26,14 @@ namespace Protocol {
 
         inline Message& operator=(const std::string& data) {
             message = data;
-            header.id = 0;
             header.length = message.size();
             bytes = message.data();
+
+            return *this;
+        }
+
+        inline Message& operator%(uint32_t id) {
+            header.id = id;
 
             return *this;
         }
@@ -42,8 +51,9 @@ namespace Protocol {
             *this = std::move(msg);
         }
 
-        Message() = default;
-        Message(const std::string& msg) { *(this) = msg; }
+        Message(): header({0,0}) {}
+        Message(const std::string& msg) { *(this) = msg; header.id = 0; }
+        Message(uint32_t id, const std::string& msg) { *(this) = msg; header.id = id; }
 
     private:
         std::string message;
@@ -65,8 +75,5 @@ namespace Protocol {
 
         MessageCache(): msg(""), pos(0), status(EMPTY) {}
     };
-
-    extern bool asioSendMessage(asio::ip::tcp::socket& soc, const Message& msg);
-    extern bool asioReadMessage(asio::ip::tcp::socket& soc, Message& msg);
 
 }

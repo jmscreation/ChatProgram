@@ -12,15 +12,14 @@ using namespace Protocol;
         Base Server Class
 ---------------------------------*/
 
-
 Server::Server(asio::io_context& ctx):
         context(ctx),
         acceptor(tcp::acceptor(context, tcp::endpoint(tcp::v4(), PORT))),
-        handle(nullptr), serverClose(false) {}
+        handle(nullptr), serverClose(false),
+        idleWork(asio::io_context::work(ctx)) {}
 
 Server::~Server() {
     if(handle != nullptr) delete handle;
-    //if(acceptor != nullptr) delete acceptor;
 }
 
 void Server::getIpAddress() {
@@ -45,35 +44,43 @@ void Server::getIpAddress() {
         Base Client Handle
 ---------------------------------*/
 
-
-
-ClientHandle::ClientHandle(): localhandle(nullptr), running(true), socket(nullptr) {
+ClientHandle::ClientHandle(tcp::socket soc): socket(std::move(soc)), localhandle(nullptr), app(nullptr), running(true) {
 }
 
 ClientHandle::~ClientHandle() {
     if(localhandle != nullptr){
         running = false;
-        localhandle->join();
+        if(localhandle->joinable()){
+            localhandle->detach(); // break free to allow time to close asynchronously
+        }
         delete localhandle;
     }
 }
 
-void ClientHandle::start(tcp::socket& soc) {
+void ClientHandle::start(Application* application) {
+    app = application;
     localhandle = new std::thread(_Handle, this);
 }
 
 void ClientHandle::_Handle() {
-    if(!Init()){
+    if(app == nullptr) return;
+
+    if(!app->Init()){
         running = false;
     }
 
     while(running){
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-        if(!Handle()){
+        if(!app->Handle()){
             running = false;
         }
     }
+
+    app->Close();
+
+    delete app;
+    app = nullptr;
 }
 
 bool ClientHandle::readMessage(Message& msg) { // receives message - moves message from queue into return reference
@@ -94,6 +101,10 @@ bool ClientHandle::sendMessage(Message&& msg) { // sends message - given message
     return true;
 }
 
+std::string ClientHandle::getIPAddress() {
+    return socket.remote_endpoint().address().to_string();
+}
+
 
 
 
@@ -102,6 +113,11 @@ bool ClientHandle::sendMessage(Message&& msg) { // sends message - given message
 
 bool ClientHandle::asioReadMessageHandle() {
     try {
+        if(!socket.is_open()){ // check if client is still connected
+            running = false;
+            return false;
+        }
+
         struct Buffer {
             void* ptr;
             size_t len;
@@ -115,6 +131,7 @@ bool ClientHandle::asioReadMessageHandle() {
                 curIn.pos = 0;
                 curIn.msg = ""; // generate new cache message
                 
+                curIn.readbuf.clear(); // empty content buffer
                 curIn.status = MessageCache::EMPTY;
             }
             [[fallthrough]];
@@ -128,20 +145,22 @@ bool ClientHandle::asioReadMessageHandle() {
             } break;
 
             case MessageCache::PENDING:{
-                buf.ptr = (void*)curIn.cache.data();
+                buf.ptr = (void*)curIn.cache.data(); // use cache when writing to content buffer (readbuf)
                 buf.len = std::min(curIn.msg.header.length - curIn.pos, curIn.cache.size());
                 curIn.len = curIn.msg.header.length;
             } break;
         }
 
-        socket->async_read_some(asio::buffer(buf.ptr, buf.len), [&](asio::system_error err, size_t read){
-            if(curIn.EMPTY && read){
+        socket.async_read_some(asio::buffer(buf.ptr, buf.len), std::bind([&](asio::system_error err, size_t read, std::shared_ptr<ClientHandle> self){
+            if(!self->running) return;
+            
+            if(curIn.status == MessageCache::EMPTY && read){
                 curIn.status = MessageCache::PENDING_HEADER;
             }
             if(curIn.status != MessageCache::EMPTY){ // currently streaming
                 curIn.pos += read;
 
-                if(read && curIn.status == MessageCache::PENDING){ // streaming message content
+                if(read && (curIn.status == MessageCache::PENDING)){ // streaming message content
                     curIn.readbuf.append(curIn.cache.data(), read); // append cache to read buffer if reading message content
                 }
 
@@ -159,6 +178,7 @@ bool ClientHandle::asioReadMessageHandle() {
                             curIn.status = MessageCache::PENDING; // ready to stream message content
                         break;
                         case MessageCache::PENDING:
+                            curIn.msg = curIn.readbuf; // copy content buffer into message
                             curIn.status = MessageCache::READY; // ready to append to inbox
                         break;
                     }
@@ -166,11 +186,11 @@ bool ClientHandle::asioReadMessageHandle() {
                 }
             }
 
-            asioReadMessageHandle();
-        });
+            self->asioReadMessageHandle();
+        }, std::placeholders::_1, std::placeholders::_2, shared_from_this()));
 
-        
     } catch(std::exception err){
+        running = false;
         std::cout << err.what() << "\n";
         return false;
     }
@@ -180,6 +200,11 @@ bool ClientHandle::asioReadMessageHandle() {
 
 bool ClientHandle::asioSendMessageHandle() {
     try {
+        if(!socket.is_open()){ // check if client is still connected
+            running = false;
+            return false;
+        }
+
         struct Buffer {
             void* ptr;
             size_t len;
@@ -194,8 +219,11 @@ bool ClientHandle::asioSendMessageHandle() {
                     outbox.pop();
                     curOut.pos = 0;
                     curOut.status = MessageCache::PENDING_HEADER;
+                } else {
+                    break;
                 }
-            } break;
+            }
+            [[fallthrough]];
             
             case MessageCache::PENDING_HEADER:{
                 buf.ptr = reinterpret_cast<void*>( (char*)(&curOut.msg.header) + curOut.pos );
@@ -210,13 +238,15 @@ bool ClientHandle::asioSendMessageHandle() {
             } break;
         }
 
-        socket->async_write_some(asio::buffer(buf.ptr, buf.len), [&](asio::system_error err, size_t written){
+        socket.async_write_some(asio::buffer(buf.ptr, buf.len), std::bind([&](asio::system_error err, size_t written, std::shared_ptr<ClientHandle> self){
+            if(!self->running) return;
+
             if(curOut.status != MessageCache::EMPTY){
                 curOut.pos += written;
                 if(!written){
                     if(curOut.pos < curOut.len){
                         std::cout << "Failed to async_write: " << err.what() << "\n";
-                        running = false;
+                        self->running = false;
                         return;
                     }
                 }
@@ -233,11 +263,12 @@ bool ClientHandle::asioSendMessageHandle() {
                 }
             }
 
-            asioSendMessageHandle();
-        });
+            self->asioSendMessageHandle();
+        }, std::placeholders::_1, std::placeholders::_2, shared_from_this()));
 
         
     } catch(std::exception err){
+        running = false;
         std::cout << err.what() << "\n";
         return false;
     }
