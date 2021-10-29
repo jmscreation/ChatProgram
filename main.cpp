@@ -21,8 +21,12 @@ int main(int argc, char** argv) {
 
         if(v == "client"){
             Client client(context);
+            std::string ip = "localhost";
+            if(argc > 2){
+                ip = argv[2];
+            }
 
-            return client.Run<ClientApplication>("localhost");
+            return client.Run<ClientApplication>(ip);
         }
     }
 
