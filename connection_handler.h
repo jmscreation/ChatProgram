@@ -21,7 +21,7 @@ class Application; // forward declaration for Application class
 */
 class ConnectionHandle : public std::enable_shared_from_this<ConnectionHandle> {
     asio::ip::tcp::socket socket;
-    std::mutex ctxLock;
+    std::mutex ctxLock, mtxClosed;
     std::queue<Protocol::Message> inbox, outbox;
 
     std::thread* localhandle;
@@ -35,6 +35,7 @@ class ConnectionHandle : public std::enable_shared_from_this<ConnectionHandle> {
     bool asioReadMessageHandle(); // init async read handle
     bool asioSendMessageHandle(); // init async write handle
     void start(Application* application); // begin thread localhandle application
+    void stop(); // stop application and block until close
 
 
 public:

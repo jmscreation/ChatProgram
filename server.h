@@ -19,6 +19,7 @@
 
 #include "base_application.h"
 
+#include "ip_tools.h"
 #include "proto.h"
 #include "pause.h"
 #include "clock.h"
@@ -40,8 +41,6 @@ public:
     Server(asio::io_context& ctx);
     virtual ~Server();
 
-    void getIpAddress();
-
     template<class T>
     void GenerateClient(asio::ip::tcp::socket soc) {
         static_assert(std::derived_from<T, Application> == true); // generate Application only
@@ -59,8 +58,8 @@ public:
 
         if(!client->asioSendMessageHandle() ||
            !client->asioReadMessageHandle()){
-            soc.close();
-            std::cout << "init async io failed\n";
+            client->stop();
+            client.reset();
             return;
         }
 
@@ -85,23 +84,22 @@ public:
 
     template<class T>
     int Run() {
-        std::cout << "Server listening on:\n";
+
+        Handler<T>();
 
         handle = new std::thread([&](){
-            getIpAddress();
-
             context.run();
         });
 
-        Handler<T>();
-        
         std::atomic<bool> gccRunning = true;
         std::thread garbageClientCollector([&](){
             do {
                 std::scoped_lock lock(joinMtx); // don't break system when accessing client table
                 for(int i=0; i < clientHandles.size(); ++i){
-                    auto client = clientHandles[i];
+                    auto& client = clientHandles[i];
                     if(!client->running){
+                        client->stop();
+                        client.reset();
                         clientHandles.erase(clientHandles.begin() + i--);
                         continue;
                     }
@@ -110,21 +108,28 @@ public:
             
             {   // when garbage collector finishes, cleanup all active clients
                 std::scoped_lock lock(joinMtx);
-                for(auto client : clientHandles){ // stop running all client application handles
-                    client->running = false;
+                for(auto& client : clientHandles){ // stop running all client application handles
+                    client->stop();
+                    client.reset();
                 }
                 clientHandles.clear(); // free all shared pointers from client table
             }
         });
 
+        {
+            T initApp(nullptr);
+            initApp.StaticInit();
+        }
+
         std::cout << "Press any key to close server...\n";
         pause();
 
-        std::cout << "Closing Server...\n";
-        context.stop();
 
         gccRunning = false;
         if(garbageClientCollector.joinable()) garbageClientCollector.join();
+
+        std::cout << "Closing Server...\n";
+        context.stop();
 
         if(handle != nullptr && handle->joinable()) handle->join();
 

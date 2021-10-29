@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
         if(v == "client"){
             Client client(context);
 
-            return client.Run();
+            return client.Run<ClientApplication>("localhost");
         }
     }
 

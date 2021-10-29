@@ -13,17 +13,29 @@ ConnectionHandle::ConnectionHandle(tcp::socket soc): socket(std::move(soc)), loc
 
 ConnectionHandle::~ConnectionHandle() {
     if(localhandle != nullptr){
-        running = false;
         if(localhandle->joinable()){
             localhandle->detach(); // break free to allow time to close asynchronously
         }
         delete localhandle;
+        stop();
     }
 }
 
 void ConnectionHandle::start(Application* application) {
     app = application;
     localhandle = new std::thread(_Handle, this);
+}
+
+void ConnectionHandle::stop() {
+    running = false;
+    do {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if(mtxClosed.try_lock()){ // if lock is allowed, thread is still running
+            mtxClosed.unlock();
+        } else {
+            break;
+        }
+    } while(1);
 }
 
 void ConnectionHandle::_Handle() {
@@ -45,6 +57,8 @@ void ConnectionHandle::_Handle() {
 
     delete app;
     app = nullptr;
+
+    mtxClosed.lock(); // lock the thread is closed mutex
 }
 
 bool ConnectionHandle::readMessage(Message& msg) { // receives message - moves message from queue into return reference
