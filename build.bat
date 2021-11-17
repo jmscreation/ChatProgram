@@ -24,7 +24,7 @@ set ASYNC_BUILD=1
 :: Configure Source For Compiling And Additional Custom Library Directories / Names
 set SOURCE_DIRECTORIES=src
 set INCLUDE_DIRECTORIES=include
-set LIBRARY_DIRECTORIES=libraries\asio
+set LIBRARY_DIRECTORIES=libraries\libasio
 set LIBRARY_NAMES=ws2_32 wsock32
 
 :: Custom Library Support Directory Names

@@ -21,4 +21,4 @@
 *.app
 
 .vscode
-.objs64
+libraries
