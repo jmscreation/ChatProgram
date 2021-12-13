@@ -160,7 +160,6 @@ bool ConnectionHandle::asioReadMessageHandle() {
                     curIn.pos = 0; // always reset position when finished writing
                 }
             }
-
             self->asioReadMessageHandle();
         }, std::placeholders::_1, std::placeholders::_2, shared_from_this()));
 
@@ -232,7 +231,6 @@ bool ConnectionHandle::asioSendMessageHandle() {
                     curOut.pos = 0; // always reset position when finished writing
                 }
             }
-
             self->asioSendMessageHandle();
         }, std::placeholders::_1, std::placeholders::_2, shared_from_this()));
 

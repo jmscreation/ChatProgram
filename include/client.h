@@ -80,7 +80,7 @@ public:
             std::thread appHandle([](){
                 T staticApp(nullptr);
                 staticApp.StaticInit();
-                while(staticApp.StaticHandle(0));
+                while(staticApp.StaticHandle(0)) std::this_thread::sleep_for(std::chrono::milliseconds(20));
             });
 
             GenerateClient<T>(std::move(socket));

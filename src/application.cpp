@@ -148,9 +148,17 @@ bool ClientApplication::Handle() {
 bool ClientApplication::WindowUpdate(Window* win, float delta) {
     static std::string chat, data;
     static bool terminated = false;
+    static const std::map<olc::Key, std::pair<char, char>> KeyboardMap = {
+        {olc::K1, {'1', '!'}}, {olc::K2, {'2','@'}}, {olc::K3, {'3','#'}}, {olc::K4, {'4','$'}}, {olc::K5, {'5','%'}},
+        {olc::K6, {'6','^'}}, {olc::K7, {'7','&'}}, {olc::K8, {'8','*'}}, {olc::K9, {'9','('}}, {olc::K0, {'0',')'}},
+        {olc::COMMA, {',','<'}}, {olc::PERIOD, {'.','>'}}, {olc::MINUS, {'-','_'}}, {olc::EQUALS, {'=','+'}},
+        {olc::OEM_1, {';',':'}}, {olc::OEM_2, {'/','?'}}, {olc::OEM_3, {'`','~'}}, {olc::OEM_4, {'[','{'}},
+        {olc::OEM_5, {'\\','|'}}, {olc::OEM_6, {']','}'}}, {olc::OEM_7, {'\'','"'}}
+    };
 
     std::this_thread::sleep_for(std::chrono::milliseconds(8));
     if(connected){
+
         if(input.header.id != 99){
             std::scoped_lock lock(readMtx);
             Message read(std::move(input));
@@ -159,28 +167,29 @@ bool ClientApplication::WindowUpdate(Window* win, float delta) {
             chat.append(read.bytes, read.header.length);
             chat += "\n";
         }
-            
-        for(int letter = olc::A; letter <= olc::Key::Z; letter++){
-            if(win->GetKey(olc::Key(letter)).bPressed){
-                data += std::string(1, 'a' + letter - 1 - (32 * win->GetKey(olc::SHIFT).bHeld));
+        if(data.size() <= 31){    
+            for(int letter = olc::A; letter <= olc::Key::Z; letter++){
+                if(win->GetKey(olc::Key(letter)).bPressed){
+                    data += std::string(1, 'a' + letter - 1 - (32 * win->GetKey(olc::SHIFT).bHeld));
+                }
             }
-        }
 
-        for(int digit = olc::K0; digit <= olc::Key::K9; digit++){
-            if(win->GetKey(olc::Key(digit)).bPressed){
-                data += std::string(1, '0' + digit - 27);
+            for(const auto& pair : KeyboardMap){
+                if(win->GetKey(pair.first).bPressed){
+                    data += std::string(1, win->GetKey(olc::SHIFT).bHeld ? pair.second.second : pair.second.first);
+                }
             }
-        }
 
-        if(win->GetKey(olc::SPACE).bPressed){
-            if(data.size()) data += " ";
+            if(win->GetKey(olc::SPACE).bPressed){
+                if(data.size()) data += " ";
+            }
         }
 
         if(win->GetKey(olc::BACK).bPressed){
             if(data.size()) data.pop_back();
         }
 
-        if(win->GetKey(olc::ENTER).bPressed){
+        if(win->GetKey(olc::ENTER).bPressed && data.size()){
             std::scoped_lock lock(readMtx);
             chat += "<<< " + data + "\n";
             output = Message(data);
@@ -188,6 +197,7 @@ bool ClientApplication::WindowUpdate(Window* win, float delta) {
         }
     } else if(!terminated) {
         chat += "-- Connection Closed --\n";
+        data.clear();
         terminated = true;
     }
 
