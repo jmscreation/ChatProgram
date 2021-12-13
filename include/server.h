@@ -94,6 +94,7 @@ public:
         std::atomic<bool> gccRunning = true;
         std::thread garbageClientCollector([&](){
             do {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 std::scoped_lock lock(joinMtx); // don't break system when accessing client table
                 for(int i=0; i < clientHandles.size(); ++i){
                     auto& client = clientHandles[i];
@@ -116,14 +117,20 @@ public:
             }
         });
 
-        {
-            T initApp(nullptr);
-            initApp.StaticInit();
-        }
-
-        std::cout << "Press any key to close server...\n";
-        pause();
-
+        std::thread appHandle([&](){
+            T staticApp(nullptr);
+            staticApp.StaticInit();
+            size_t count = 0;
+            while(staticApp.StaticHandle(count)){
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                {
+                    std::scoped_lock lock(joinMtx);
+                    count = clientHandles.size();
+                }
+            }
+        });
+   
+        appHandle.join(); // server closes via application
 
         gccRunning = false;
         if(garbageClientCollector.joinable()) garbageClientCollector.join();

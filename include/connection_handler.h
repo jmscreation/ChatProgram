@@ -9,6 +9,8 @@
 
 #include <string>
 #include <queue>
+#include <chrono>
+#include <thread>
 
 
 #include "proto.h"
@@ -20,6 +22,9 @@ class Application; // forward declaration for Application class
     This class handles an individual client on the server
 */
 class ConnectionHandle : public std::enable_shared_from_this<ConnectionHandle> {
+    static size_t __connectionid;
+    const size_t uuid;
+
     asio::ip::tcp::socket socket;
     std::mutex ctxLock, mtxClosed;
     std::queue<Protocol::Message> inbox, outbox;
@@ -41,7 +46,8 @@ class ConnectionHandle : public std::enable_shared_from_this<ConnectionHandle> {
 public:
     bool readMessage(Protocol::Message& msg);
     bool sendMessage(Protocol::Message&& msg);
-    std::string getIPAddress();
+    std::string getIPAddress() const;
+    inline size_t getUUID() const { return uuid; }
 
     ConnectionHandle(asio::ip::tcp::socket soc);
     virtual ~ConnectionHandle();

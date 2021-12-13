@@ -77,10 +77,11 @@ public:
             socket.connect(ep);
             socket.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_SNDTIMEO>{3000}); // send timeout 3 seconds
 
-            {
-                T initApp(nullptr);
-                initApp.StaticInit();
-            }
+            std::thread appHandle([](){
+                T staticApp(nullptr);
+                staticApp.StaticInit();
+                while(staticApp.StaticHandle(0));
+            });
 
             GenerateClient<T>(std::move(socket));
 
@@ -88,7 +89,7 @@ public:
                 context.run();
             });
 
-            pause();
+            appHandle.join(); // client closes via static application
 
             if(connectionHandle != nullptr){
                 connectionHandle->stop();

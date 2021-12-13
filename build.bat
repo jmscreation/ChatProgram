@@ -25,7 +25,7 @@ set ASYNC_BUILD=1
 set SOURCE_DIRECTORIES=src
 set INCLUDE_DIRECTORIES=include
 set LIBRARY_DIRECTORIES=libraries\libasio-main
-set LIBRARY_NAMES=ws2_32 wsock32
+set LIBRARY_NAMES=ws2_32 wsock32 setupapi comdlg32 user32 gdi32 gdiplus opengl32 Shlwapi dwmapi stdc++fs
 
 :: Custom Library Support Directory Names
 set LIBRARY_DIRECTORY_NAME=lib\windows

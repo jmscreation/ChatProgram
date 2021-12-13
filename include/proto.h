@@ -50,8 +50,10 @@ namespace Protocol {
         Message(Message&& msg) { // move constructor emulates move assignment
             *this = std::move(msg);
         }
+        Message(const Message& msg) = default; // copy constructor
 
         Message(): header({0,0}) {}
+        Message(uint32_t id) { header.id = id; header.length = 0; }
         Message(const std::string& msg) { *(this) = msg; header.id = 0; }
         Message(uint32_t id, const std::string& msg) { *(this) = msg; header.id = id; }
 

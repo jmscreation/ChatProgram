@@ -8,7 +8,9 @@ using namespace Protocol;
         Connection Handler
 ---------------------------------*/
 
-ConnectionHandle::ConnectionHandle(tcp::socket soc): socket(std::move(soc)), localhandle(nullptr), app(nullptr), running(true) {
+size_t ConnectionHandle::__connectionid = 0;
+
+ConnectionHandle::ConnectionHandle(tcp::socket soc): uuid(__connectionid++), socket(std::move(soc)), localhandle(nullptr), app(nullptr), running(true) {
 }
 
 ConnectionHandle::~ConnectionHandle() {
@@ -79,7 +81,7 @@ bool ConnectionHandle::sendMessage(Message&& msg) { // sends message - given mes
     return true;
 }
 
-std::string ConnectionHandle::getIPAddress() {
+std::string ConnectionHandle::getIPAddress() const {
     return socket.remote_endpoint().address().to_string();
 }
 
