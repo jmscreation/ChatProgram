@@ -19,20 +19,14 @@ int main(int argc, char** argv) {
             return server.Run<ServerApplication>(); // ServerApplication is what each client connects to
         }
 
-        if(v == "client"){
-            Client client(context);
-            std::string ip = "localhost";
-            if(argc > 2){
-                ip = argv[2];
-            }
-
-            return client.Run<ClientApplication>(ip);
+        Client client(context);
+        std::string ip = "localhost";
+        if(argc > 2){
+            ip = argv[2];
         }
+
+        return client.Run<ClientApplication>(ip);
     }
-
-    std::cout << "Please specify:\nserver or client\n";
-
-    pause();
 
     return 0;
 }

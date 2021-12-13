@@ -16,11 +16,10 @@ void ServerApplication::StaticInit() { // init once per server
         std::cout << "Failed to resolve local ip addresses!\n";
     }
 
-    std::cout << "Press ctrl + space to quit\n";
+    std::cout << "Press CTRL + C to close server\n";
 }
 
 bool ServerApplication::Init() { // init once per client connect
-
     if(!connection->sendMessage(Message("Welcome to the chat server:"))){
         std::cout << "Failed to send message to new client\n";
         return false;
@@ -96,6 +95,7 @@ void ServerApplication::Close() { // on client disconnect
 static std::atomic<Window*> window = nullptr;
 static Message output(99), input(99);
 static std::mutex readMtx;
+static std::atomic<bool> connected = false;
 
 void ClientApplication::StaticInit() {
     Window* win = new Window(&ClientApplication::WindowUpdate,
@@ -107,12 +107,11 @@ void ClientApplication::StaticInit() {
 }
 
 bool ClientApplication::Init() {
-    std::string text;
-
     if(!connection->sendMessage(Message("New member connected"))){
         std::cout << "Failed to send message\n";
     } else {
         std::cout << "Message sent\n";
+        connected = true;
     }
 
     return true;
@@ -148,42 +147,48 @@ bool ClientApplication::Handle() {
 
 bool ClientApplication::WindowUpdate(Window* win, float delta) {
     static std::string chat, data;
+    static bool terminated = false;
+
     std::this_thread::sleep_for(std::chrono::milliseconds(8));
-    
-    if(input.header.id != 99){
-        std::scoped_lock lock(readMtx);
-        Message read(std::move(input));
-        input.header.id = 99;
-        chat += ">>> ";
-        chat.append(read.bytes, read.header.length);
-        chat += "\n";
-    }
-        
-    for(int letter = olc::A; letter <= olc::Key::Z; letter++){
-        if(win->GetKey(olc::Key(letter)).bPressed){
-            data += std::string(1, 'a' + letter - 1 - (32 * win->GetKey(olc::SHIFT).bHeld));
+    if(connected){
+        if(input.header.id != 99){
+            std::scoped_lock lock(readMtx);
+            Message read(std::move(input));
+            input.header.id = 99;
+            chat += ">>> ";
+            chat.append(read.bytes, read.header.length);
+            chat += "\n";
         }
-    }
-
-    for(int digit = olc::K0; digit <= olc::Key::K9; digit++){
-        if(win->GetKey(olc::Key(digit)).bPressed){
-            data += std::string(1, '0' + digit - 27);
+            
+        for(int letter = olc::A; letter <= olc::Key::Z; letter++){
+            if(win->GetKey(olc::Key(letter)).bPressed){
+                data += std::string(1, 'a' + letter - 1 - (32 * win->GetKey(olc::SHIFT).bHeld));
+            }
         }
-    }
 
-    if(win->GetKey(olc::SPACE).bPressed){
-        if(data.size()) data += " ";
-    }
+        for(int digit = olc::K0; digit <= olc::Key::K9; digit++){
+            if(win->GetKey(olc::Key(digit)).bPressed){
+                data += std::string(1, '0' + digit - 27);
+            }
+        }
 
-    if(win->GetKey(olc::BACK).bPressed){
-        if(data.size()) data.pop_back();
-    }
+        if(win->GetKey(olc::SPACE).bPressed){
+            if(data.size()) data += " ";
+        }
 
-    if(win->GetKey(olc::ENTER).bPressed){
-        std::scoped_lock lock(readMtx);
-        chat += "<<< " + data + "\n";
-        output = Message(data);
-        data.clear();
+        if(win->GetKey(olc::BACK).bPressed){
+            if(data.size()) data.pop_back();
+        }
+
+        if(win->GetKey(olc::ENTER).bPressed){
+            std::scoped_lock lock(readMtx);
+            chat += "<<< " + data + "\n";
+            output = Message(data);
+            data.clear();
+        }
+    } else if(!terminated) {
+        chat += "-- Connection Closed --\n";
+        terminated = true;
     }
 
     if(win->GetKey(olc::ESCAPE).bPressed) return false; // close
@@ -196,4 +201,5 @@ bool ClientApplication::WindowUpdate(Window* win, float delta) {
 
 void ClientApplication::Close() {
     std::cout << "Connection Terminated\n";
+    connected = false;
 }
