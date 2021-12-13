@@ -8,17 +8,19 @@
 
 int main(int argc, char** argv) {
 
+    asio::io_context context;
+
     if(argc > 1){
         std::string v = argv[1];
 
-        asio::io_context context;
 
         if(v == "server"){
             Server server(context);
 
             return server.Run<ServerApplication>(); // ServerApplication is what each client connects to
         }
-
+    }
+    {
         Client client(context);
         std::string ip = "localhost";
         if(argc > 2){
